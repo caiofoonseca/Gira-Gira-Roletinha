@@ -25,14 +25,14 @@
 
 - Linguagem: **C**
 - Biblioteca Gráfica e de Entrada/Saída: **[raylib](https://www.raylib.com/)**
-- Compilação: **GCC** via **MSYS2** (MinGW 64-bit)
+- Compilação: **GCC**
 
 ---
 
 ## 🚀 Como executar
 
 1. **Pré-requisitos**:
-   - MSYS2 instalado (https://www.msys2.org/)
+   - Se for Windows ter MSYS2 instalado (https://www.msys2.org/)
    - No MSYS2 MinGW 64-bit shell, instale as dependências:
    ```bash
    pacman -Syu            # atualiza pacotes
