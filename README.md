@@ -34,10 +34,10 @@
 1. **Pré-requisitos**:
    - MSYS2 instalado (https://www.msys2.org/)
    - No MSYS2 MinGW 64-bit shell, instale as dependências:
-     ```bash
-     pacman -Syu            # atualiza pacotes
-     pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-raylib
-     ```
+   ```bash
+   pacman -Syu            # atualiza pacotes
+   pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-raylib
+   ```
 
 2. **Compilação e execução**:
    ```bash
