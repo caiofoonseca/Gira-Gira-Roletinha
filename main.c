@@ -4,8 +4,8 @@
 #include <string.h>
 #include <time.h> 
 #include <stdbool.h>
-#include <unistd.h> // Para usar system() no Windows
-#include <json-c/json.h> // Biblioteca externa para ler JSON
+#include <unistd.h>
+#include <json-c/json.h>
 
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 500
@@ -97,12 +97,13 @@ Pergunta gerarPerguntaComIA(const char *categoria) {
     remove("pergunta.json"); // Apaga o arquivo anterior
 
     Pergunta p;
-    char comando[128];
+   char comando[128];
     snprintf(comando, sizeof(comando),
-    "\"C:\\Users\\Caio Fonseca\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" \"C:\\Users\\Caio Fonseca\\Gira-Gira_Roletinha\\gerar_pergunta.py\" \"%s\"", categoria);
+        "/usr/bin/python3 gerar_pergunta.py \"%s\"", categoria);
     system(comando);
 
-    FILE *fp = fopen("C:\\Users\\Caio Fonseca\\Gira-Gira_Roletinha\\pergunta.json", "r");
+
+    FILE *fp = fopen("pergunta.json", "r");
     if (!fp) {
         p.pergunta = "Erro ao carregar pergunta";
         for (int i = 0; i < 4; i++) p.alternativas[i] = "N/A";
