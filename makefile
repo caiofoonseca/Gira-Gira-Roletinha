@@ -1,23 +1,23 @@
 CC      := gcc
-CFLAGS  := -Iinclude -Wall -Wextra -O2 $(shell pkg-config --cflags raylib json-c)
-LDFLAGS := $(shell pkg-config --libs    raylib json-c)
+CFLAGS  := -Iinclude -Wall -Wextra -O2 $(shell pkg-config --cflags json-c libcurl)
+RAYLIB_CFLAGS := $(shell pkg-config --cflags raylib)
+LDFLAGS_GIRA  := $(shell pkg-config --libs raylib json-c)
+LDFLAGS_PERG  := $(shell pkg-config --libs json-c libcurl)
 
-SRCS    := main.c           # <-- retire ui_raylib.c daqui!
-OBJS    := $(SRCS:.c=.o)
-TARGET  := gira
+SRC_GAME   := main.c
+SRC_PERG   := pergunta.c
 
-.PHONY: all clean run
+.PHONY: all clean
 
-all: $(TARGET)
+all: gerar_pergunta gira
 
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+# gera o utilitário que faz a chamada à API e escreve pergunta.json
+gerar_pergunta: $(SRC_PERG)
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS_PERG)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-run: all
-	./$(TARGET)
+# gera o jogo, que pressupõe que gerar_pergunta exista e tenha rodado antes
+gira: $(SRC_GAME)
+	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) $< -o $@ $(LDFLAGS_GIRA)
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f gerar_pergunta gira

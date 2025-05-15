@@ -97,10 +97,10 @@ Pergunta gerarPerguntaComIA(const char *categoria) {
     remove("pergunta.json"); // Apaga o arquivo anterior
 
     Pergunta p;
-   char comando[128];
+    char comando[128];
     snprintf(comando, sizeof(comando),
-        "/usr/bin/python3 gerar_pergunta.py \"%s\"", categoria);
-    system(comando);
+        "./gerar_pergunta \"%s\"", categoria);
+    (void)system(comando);
 
 
     FILE *fp = fopen("pergunta.json", "r");

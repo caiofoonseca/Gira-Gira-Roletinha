@@ -21,3 +21,11 @@ dae;4
 uis;0
 Lesgo;0
 fre;0
+vitoria;0
+rodrigo lucena;0
+rodrigo lucena;0
+rodrigo lucena;2
+tatum;3
+tatum;2
+tatum;0
+tatum;2
