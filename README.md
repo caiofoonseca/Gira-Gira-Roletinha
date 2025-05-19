@@ -42,7 +42,7 @@
    sudo apt install libraylib-dev
 
 2. **Compilação e execução**:
-   bash
+   ```bash
    make
    export OPENAI_API_KEY="SUA_CHAVE_AQUI"
-   ./gira
+   ./gira
