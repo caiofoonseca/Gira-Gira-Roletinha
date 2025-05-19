@@ -60,7 +60,9 @@ Pergunta gerarPerguntaComIA(const char *categoria) {
     struct curl_slist *headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     char auth_header[256];
-    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", getenv("OPENAI_API_KEY"));
+    snprintf(auth_header, sizeof(auth_header),
+      "Authorization: Bearer %s",
+      getenv("OPENAI_API_KEY"));
     headers = curl_slist_append(headers, auth_header);
 
     curl_easy_setopt(curl, CURLOPT_URL, API_URL);
@@ -92,23 +94,52 @@ Pergunta gerarPerguntaComIA(const char *categoria) {
     json_object *content_obj = NULL;
     json_object_object_get_ex(message_obj, "content", &content_obj);
     const char *content_str = json_object_get_string(content_obj);
-
     json_object_put(resp_json);
 
-    json_object *root2 = json_tokener_parse(content_str);
+    const char *start = strchr(content_str, '{');
+    const char *end = strrchr(content_str, '}');
+    char *payload;
+    if (start && end && end > start) {
+      size_t len = end - start + 1;
+      payload = malloc(len + 1);
+      memcpy(payload, start, len);
+      payload[len] = '\0';
+    } else {
+      payload = strdup(content_str);
+    }
+
+    json_object *root2 = json_tokener_parse(payload);
+    free(payload);
+    if (!root2 || json_object_get_type(root2) != json_type_object) {
+      if (root2) json_object_put(root2);
+      p.pergunta = strdup("Erro: JSON inválido");
+      p.respostaCorreta = 0;
+      for (int i = 0; i < 4; i++) p.alternativas[i] = strdup("N/A");
+      return p;
+    }
+
     json_object *jperg = NULL, *jalts = NULL, *jcor = NULL;
     json_object_object_get_ex(root2, "pergunta", &jperg);
     json_object_object_get_ex(root2, "alternativas", &jalts);
     json_object_object_get_ex(root2, "correta", &jcor);
 
+    if (!jperg || !jalts || json_object_get_type(jalts) != json_type_array || !jcor) {
+      json_object_put(root2);
+      p.pergunta = strdup("Erro: JSON inesperado");
+      p.respostaCorreta = 0;
+      for (int i = 0; i < 4; i++) p.alternativas[i] = strdup("N/A");
+      return p;
+    }
+
     p.pergunta = strdup(json_object_get_string(jperg));
     p.respostaCorreta = json_object_get_int(jcor);
     for (int i = 0; i < 4; i++) {
-      p.alternativas[i] = strdup(
-        json_object_get_string(
-        json_object_array_get_idx(jalts, i)
-        )
-      );
+      json_object *item = json_object_array_get_idx(jalts, i);
+      if (item && json_object_get_type(item) == json_type_string) {
+        p.alternativas[i] = strdup(json_object_get_string(item));
+      } else {
+        p.alternativas[i] = strdup("N/A");
+      }
     }
 
     json_object_put(root2);
