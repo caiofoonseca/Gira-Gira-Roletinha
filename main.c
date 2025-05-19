@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <json-c/json.h>
 
-#define SCREEN_WIDTH 800
+#define SCREEN_WIDTH 1000
 #define SCREEN_HEIGHT 600
 #define MAX_QUESTIONS 100
 
@@ -41,6 +41,9 @@ typedef struct {
   int pontos;
 } Jogador;
 
+void InitBackground(void);
+void DrawBackground(void);
+void UnloadBackground(void);
 void freePergunta(Pergunta *p);
 int compararRanking(const void *a, const void *b);
 bool nomeExiste(const char *nome);
@@ -49,9 +52,14 @@ Node* initCategories();
 const char* spinCategory(Node *head);
 Pergunta gerarPerguntaComIA(const char *categoria);
 
+static Texture2D bgTexture;
+static Vector2   bgPosition;
+static float     bgScale;
+
 int main(void) {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Gira-Gira Roletinha");
   SetTargetFPS(60);
+  InitBackground();
   srand((unsigned)time(NULL));
 
   GameState state = STATE_MENU;
@@ -85,7 +93,7 @@ int main(void) {
     Vector2 mouse = GetMousePosition();
 
     BeginDrawing();
-    ClearBackground(RAYWHITE);
+    DrawBackground();
 
     switch (state) {
       case STATE_MENU: {
@@ -202,17 +210,29 @@ int main(void) {
           20, 20, 20, DARKGRAY);
         DrawText(TextFormat("Pontos: %d", pontos),
           SCREEN_WIDTH-150, 20, 20, DARKGRAY);
-        DrawText(TextFormat("Categoria: %s", categoriaAtual),
-          SCREEN_WIDTH/2 -100, 60, 20, DARKBLUE);
 
-        DrawText(perguntaAtual.pergunta,
-          100, 110, 20, BLACK);
+        const int catFontSize = 20;
+        const int altFontSize = 20;
+
+        char catText[64];
+        sprintf(catText, "Categoria: %s", categoriaAtual);
+        int catW = MeasureText(catText, catFontSize);
+        int catX = (SCREEN_WIDTH - catW) / 2;
+        int catY = 60;
+        DrawText(catText, catX, catY, catFontSize, DARKBLUE);
+
+        int qW = MeasureText(perguntaAtual.pergunta, 20);
+        int qX = (SCREEN_WIDTH - qW) / 2;
+        DrawText(perguntaAtual.pergunta, qX, 110, 20, BLACK);
 
         for (int i = 0; i < 4; i++) {
           DrawRectangleRec(botoesAlt[i], LIGHTGRAY);
-          DrawText(perguntaAtual.alternativas[i],
-            botoesAlt[i].x + (500 - MeasureText(perguntaAtual.alternativas[i],20))/2,
-            botoesAlt[i].y + 10, 20, DARKGRAY);
+
+          int altW = MeasureText(perguntaAtual.alternativas[i], altFontSize);
+          int textX = botoesAlt[i].x + (botoesAlt[i].width - altW) / 2;
+          int textY = botoesAlt[i].y + (botoesAlt[i].height - altFontSize) / 2;
+
+          DrawText(perguntaAtual.alternativas[i], textX, textY, altFontSize, DARKGRAY);
         }
 
         if (aguardandoResposta && cliqueLiberado) {
@@ -332,14 +352,30 @@ int main(void) {
 
       default: break;
     }
-
     EndDrawing();
   }
 
+  UnloadBackground();
   if (perguntaAtual.pergunta) freePergunta(&perguntaAtual);
   if (categoriaAtual) free((void*)categoriaAtual);
   CloseWindow();
   return 0;
+}
+
+
+
+void InitBackground(void) {
+  bgTexture = LoadTexture("assets/bg.png");
+  bgPosition = (Vector2){ 0.0f, 0.0f };
+  bgScale = (float)GetScreenWidth() / bgTexture.width;
+}
+
+void DrawBackground(void) {
+  DrawTextureEx(bgTexture, bgPosition, 0.0f, bgScale, WHITE);
+}
+
+void UnloadBackground(void) {
+  UnloadTexture(bgTexture);
 }
 
 void freePergunta(Pergunta *p) {
