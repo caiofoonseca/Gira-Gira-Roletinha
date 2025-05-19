@@ -6,10 +6,12 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <json-c/json.h>
+#include <categories.h>
+#include <math.h>
+#include <pergunta.h>
 
 #define SCREEN_WIDTH 1000
 #define SCREEN_HEIGHT 600
-#define MAX_QUESTIONS 100
 
 typedef enum {
   STATE_MENU,
@@ -21,21 +23,6 @@ typedef enum {
   STATE_EXIT
 } GameState;
 
-
-static char *askedQuestions[MAX_QUESTIONS];
-static int   askedCount = 0;
-
-typedef struct Node {
-  const char *categoria;
-  struct Node *prox;
-} Node;
-
-typedef struct {
-  const char *pergunta;
-  const char *alternativas[4];
-  int respostaCorreta;
-} Pergunta;
-
 typedef struct {
   char nome[64];
   int pontos;
@@ -43,24 +30,30 @@ typedef struct {
 
 void InitBackground(void);
 void DrawBackground(void);
-void UnloadBackground(void);
-void freePergunta(Pergunta *p);
 int compararRanking(const void *a, const void *b);
 bool nomeExiste(const char *nome);
 int encontrarPosicaoRanking(const char *nome);
-Node* initCategories();
-const char* spinCategory(Node *head);
-Pergunta gerarPerguntaComIA(const char *categoria);
+static void swapJogador(Jogador *a, Jogador *b);
+static int partition(Jogador arr[], int low, int high);
+void quickSortJogadores(Jogador arr[], int low, int high);
 
 static Texture2D bgTexture;
-static Vector2   bgPosition;
-static float     bgScale;
+static Vector2 bgPosition;
+static float bgScale;
+static Texture2D wheelTex;
+static Texture2D pointerTex;
+
+Rectangle botaoJogar, botaoRankingB, botaoSair;
+Rectangle botaoCentral, botaoVoltar;
+Rectangle botoesAlt[4];
 
 int main(void) {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Gira-Gira Roletinha");
   SetTargetFPS(60);
   InitBackground();
   srand((unsigned)time(NULL));
+  Node *categorias = initCategories();
+  wheelTex   = LoadTexture("assets/roleta.png");
 
   GameState state = STATE_MENU;
 
@@ -71,12 +64,27 @@ int main(void) {
   bool respostaCorreta = false;
   bool cliqueLiberado = true;
 
+  float wheelRotation = 0;
+  float wheelSpeed = 0;
+  bool wheelSpinning = false;
   int pontos = 0;
   char nomeJogador[21] = "\0";
   int nomeLength = 0;
   int letra = 0;
 
-  Node *categorias = initCategories();
+  const float ALT_SCALE = 0.6f;
+  const int BTN_HEIGHT = 50;
+  const int SPACING_Y = 20;
+  const int TOP_Y = 120;
+
+  float altWidth = SCREEN_WIDTH * ALT_SCALE;
+  for (int i = 0; i < 4; i++) {
+    botoesAlt[i].width = altWidth;
+    botoesAlt[i].height = BTN_HEIGHT;
+    botoesAlt[i].x = (SCREEN_WIDTH - altWidth) / 2.0f;
+    botoesAlt[i].y = TOP_Y + i * (BTN_HEIGHT + SPACING_Y);
+  }
+
   const char *categoriaAtual = NULL;
   Pergunta perguntaAtual = { .pergunta = NULL, .alternativas = {NULL,NULL,NULL,NULL} };
 
@@ -94,6 +102,16 @@ int main(void) {
 
     BeginDrawing();
     DrawBackground();
+
+    if (wheelSpinning) {
+      float dt = GetFrameTime();
+      wheelRotation += wheelSpeed * dt;
+      wheelSpeed = fmaxf(0, wheelSpeed - 200*dt);
+      if (wheelSpeed <= 0) {
+        wheelSpinning = false;
+        categoriaAtual = spinCategory(categorias);
+      }
+    }
 
     switch (state) {
       case STATE_MENU: {
@@ -175,32 +193,74 @@ int main(void) {
         DrawText(TextFormat("Jogador: %s", nomeJogador),
           20, 20, 20, DARKGRAY);
         DrawText(TextFormat("Pontos: %d", pontos),
-          SCREEN_WIDTH-150, 20, 20, DARKGRAY);
+          SCREEN_WIDTH - 150, 20, 20, DARKGRAY);
 
-        DrawText("Clique para girar a roleta!",
-          SCREEN_WIDTH/2 - MeasureText("Clique para girar a roleta!",24)/2,
-          200, 24, DARKBLUE);
+        if (!wheelSpinning && CheckCollisionPointRec(mouse, botaoCentral) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
+          wheelSpinning = true;
+          wheelSpeed = 400 + rand() % 200;
+        }
 
-        DrawRectangleRec(botaoCentral, LIGHTGRAY);
-        DrawText("GIRAR ROLETA",
-          botaoCentral.x + (200 - MeasureText("GIRAR ROLETA",20))/2,
-          botaoCentral.y + 15, 20, DARKGRAY);
+        if (wheelSpinning) {
+          float dt = GetFrameTime();
+          wheelRotation += wheelSpeed * dt;
+          wheelSpeed = fmaxf(0, wheelSpeed - 200 * dt);
 
-        if (cliqueLiberado &&
-          CheckCollisionPointRec(mouse, botaoCentral) &&
-          IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+          if (wheelSpeed == 0) {
+            wheelSpinning = false;
 
-          if (perguntaAtual.pergunta) freePergunta(&perguntaAtual);
-          if (categoriaAtual) free((void*)categoriaAtual);
+            int nSeg  = countCategories(categorias);
+            float seg = 360.0f / nSeg;
+            float ang = fmodf(wheelRotation, 360.0f);
+            if (ang < 0) ang += 360.0f;
+            int idx = (int)((ang + seg * 0.5f) / seg) % nSeg;
 
-          categoriaAtual = strdup(spinCategory(categorias));
-          perguntaAtual = gerarPerguntaComIA(categoriaAtual);
+            if (categoriaAtual) free((void*)categoriaAtual);
+            categoriaAtual = strdup(getCategoryByIndex(categorias, idx));
 
-          aguardandoResposta = true;
-          mostrarFeedback = false;
-          respostaCorreta = false;
-          cliqueLiberado = false;
-          state = STATE_PLAYING;
+            perguntaAtual = gerarPerguntaComIA(categoriaAtual);
+            aguardandoResposta = true;
+            cliqueLiberado = true;
+
+            state = STATE_PLAYING;
+          }
+        }
+
+        {
+          float scale = 0.6f;
+          Vector2 center = { SCREEN_WIDTH*0.82f, SCREEN_HEIGHT*1.0f };
+          Rectangle source = { 0, 0,
+            (float)wheelTex.width,
+            (float)wheelTex.height };
+
+          Rectangle dest = {
+            center.x - (wheelTex.width  * scale) * 0.5f,
+            center.y - (wheelTex.height * scale) * 0.5f,
+            wheelTex.width  * scale,
+            wheelTex.height * scale
+          };
+
+          Vector2 origin = { dest.width * 0.5f,
+            dest.height * 0.5f };
+
+          DrawTexturePro(
+            wheelTex,
+            source,
+            dest,
+            origin,
+            wheelRotation,
+            WHITE
+          );
+
+          Vector2 ptrPos = {
+            center.x - pointerTex.width * 0.5f,
+            center.y - dest.height    * 0.5f - pointerTex.height
+          };
+          DrawTexture(pointerTex, ptrPos.x, ptrPos.y, WHITE);
+
+        }
+
+        if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
+          cliqueLiberado = true;
         }
         break;
       }
@@ -258,10 +318,6 @@ int main(void) {
         }
 
         if (mostrarFeedback) {
-          DrawText(respostaCorreta ? "Você acertou!" : "Você errou!",
-            SCREEN_WIDTH/2 -100, 440, 24,
-            respostaCorreta ? GREEN : RED);
-
           if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
             cliqueLiberado = true;
             if (respostaCorreta) {
@@ -330,7 +386,7 @@ int main(void) {
           }
           fclose(f);
         }
-        qsort(jogadores, total, sizeof(Jogador), compararRanking);
+        if (total > 0) quickSortJogadores(jogadores, 0, total - 1);
 
         for (int i = 0; i < total && i < 10; i++) {
           DrawText(TextFormat("%d. %s - %d pts", i+1,
@@ -355,14 +411,15 @@ int main(void) {
     EndDrawing();
   }
 
-  UnloadBackground();
+  destroyCategories(categorias);
+  UnloadTexture(bgTexture);
+  UnloadTexture(wheelTex);
+  UnloadTexture(pointerTex);
   if (perguntaAtual.pergunta) freePergunta(&perguntaAtual);
   if (categoriaAtual) free((void*)categoriaAtual);
   CloseWindow();
   return 0;
 }
-
-
 
 void InitBackground(void) {
   bgTexture = LoadTexture("assets/bg.png");
@@ -372,26 +429,6 @@ void InitBackground(void) {
 
 void DrawBackground(void) {
   DrawTextureEx(bgTexture, bgPosition, 0.0f, bgScale, WHITE);
-}
-
-void UnloadBackground(void) {
-  UnloadTexture(bgTexture);
-}
-
-void freePergunta(Pergunta *p) {
-  if (!p) return;
-
-  if (p->pergunta) {
-    free(p->pergunta);
-    p->pergunta = NULL;
-  }
-
-  for (int i = 0; i < 4; i++) {
-    if (p->alternativas[i]) {
-      free(p->alternativas[i]);
-      p->alternativas[i] = NULL;
-    }
-  }
 }
 
 int compararRanking(const void *a, const void *b) {
@@ -436,80 +473,29 @@ int encontrarPosicaoRanking(const char *nome) {
   return -1;
 }
 
-Node* initCategories() {
-  const char *categorias[] = {
-    "Esportes", "Ciências", "Geografia", "Entretenimento", "História", "Artes"
-  };
+static void swapJogador(Jogador *a, Jogador *b) {
+  Jogador tmp = *a;
+  *a = *b;
+  *b = tmp;
+}
 
-  Node *head = NULL, *atual = NULL;
-  for (int i = 0; i < 6; i++) {
-    Node *novo = malloc(sizeof(Node));
-    novo->categoria = categorias[i];
-    novo->prox = NULL;
-    if (!head) head = novo;
-    else atual->prox = novo;
-    atual = novo;
+static int partition(Jogador arr[], int low, int high) {
+  int pivot = arr[high].pontos;
+  int i = low - 1;
+  for (int j = low; j < high; j++) {
+    if (arr[j].pontos > pivot) {
+      i++;
+      swapJogador(&arr[i], &arr[j]);
+    }
   }
-  atual->prox = head;
-  return head;
+  swapJogador(&arr[i+1], &arr[high]);
+  return i + 1;
 }
 
-const char* spinCategory(Node *head) {
-  int passos = GetRandomValue(1, 10);
-  Node *atual = head;
-  for (int i = 0; i < passos; i++) atual = atual->prox;
-  return atual->categoria;
-}
-
-Pergunta gerarPerguntaComIA(const char *categoria) {
-  Pergunta p;
-  bool dup;
-
-  do {
-    remove("pergunta.json");
-    char comando[128];
-    snprintf(comando, sizeof(comando),
-      "./gerar_pergunta \"%s\"", categoria);
-    (void)system(comando);
-
-    FILE *fp = fopen("pergunta.json", "r");
-    if (!fp) {
-      p.pergunta = strdup("Erro ao carregar pergunta");
-      for (int i = 0; i < 4; i++) p.alternativas[i] = strdup("N/A");
-      p.respostaCorreta = 0;
-      return p;
-    }
-    char buffer[2048];
-    size_t n = fread(buffer,1,sizeof(buffer)-1,fp);
-    buffer[n] = '\0';
-    fclose(fp);
-
-    struct json_object *root = json_tokener_parse(buffer);
-    struct json_object *jperg, *jalts, *jcor;
-    json_object_object_get_ex(root, "pergunta",     &jperg);
-    json_object_object_get_ex(root, "alternativas", &jalts);
-    json_object_object_get_ex(root, "correta",      &jcor);
-
-    const char *strp = json_object_get_string(jperg);
-    p.pergunta = strdup(strp);
-    for (int i = 0; i < 4; i++) {
-      const char *alt = json_object_get_string(
-        json_object_array_get_idx(jalts, i));
-      p.alternativas[i] = strdup(alt);
-    }
-    p.respostaCorreta = json_object_get_int(jcor);
-    json_object_put(root);
-
-    dup = false;
-    for (int i = 0; i < askedCount; i++) {
-      if (strcmp(p.pergunta, askedQuestions[i]) == 0) {
-        dup = true;
-        freePergunta(&p);
-        break;
-      }
-    }
-  } while (dup && askedCount < MAX_QUESTIONS);
-
-  askedQuestions[askedCount++] = strdup(p.pergunta);
-  return p;
+void quickSortJogadores(Jogador arr[], int low, int high) {
+  if (low < high) {
+    int pi = partition(arr, low, high);
+    quickSortJogadores(arr, low, pi - 1);
+    quickSortJogadores(arr, pi + 1, high);
+  }
 }
